@@ -1,0 +1,68 @@
+experiment:
+  name: stage_b_flow_v1
+
+data:
+  BTC: data/analyzer_btc.db
+  ETH: data/analyzer_eth.db
+  SOL: data/analyzer_sol.db
+
+results_db: data/stage_b_flow_results.db
+
+latency_grid_ms: [100, 250, 500]
+size_grid_shares: [100]
+controls_per_signal: 5
+
+bootstrap:
+  iterations: 200
+  seed: 1337
+
+ranking_horizon_ms: 2000
+
+# Stage B (task: incremental value of Binance aggressive trade flow on top
+# of the Stage A momentum region: momentum 500/750/1000ms x z
+# 2.25/2.5/2.75/3.0 x vol 30/60s = 24 baseline configs.
+#
+# flow_window_ms/flow_threshold include `null` alongside the real values so
+# the grid generator's own pairing rule (both None or both set --
+# research/discovery_grid.py) produces exactly one flow=OFF baseline per
+# momentum config, plus every flow_window x flow_threshold combo on top:
+# 1 OFF + 8 windows x 6 thresholds = 49 flow variants per baseline config.
+# 24 baseline configs x 49 flow variants = 1176 signal_configs x 3 assets
+# = 3528 units total.
+signal_grid:
+  momentum_window_ms:
+    - 500
+    - 750
+    - 1000
+  z_threshold:
+    - 2.25
+    - 2.50
+    - 2.75
+    - 3.00
+  volatility_window_ms:
+    - 30000
+    - 60000
+  flow_window_ms:
+    - null
+    - 250
+    - 500
+    - 750
+    - 1000
+    - 1500
+    - 2000
+    - 3000
+    - 5000
+  flow_threshold:
+    - null
+    - 0.10
+    - 0.20
+    - 0.30
+    - 0.40
+    - 0.50
+    - 0.60
+  max_spread:
+    - 0.05
+  min_contract_price:
+    - 0.05
+  max_contract_price:
+    - 0.95

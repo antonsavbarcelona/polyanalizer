@@ -1,0 +1,64 @@
+experiment:
+  name: stage_a_momentum_v1
+
+data:
+  BTC: data/analyzer_btc.db
+  ETH: data/analyzer_eth.db
+  SOL: data/analyzer_sol.db
+
+results_db: data/signal_discovery_results.db
+
+# task item 10: execution assumptions for Stage A -- keep the search space
+# bounded, size/latency curves come later only for promising regions.
+latency_grid_ms: [100, 250, 500]
+size_grid_shares: [100]
+controls_per_signal: 5
+
+bootstrap:
+  iterations: 200
+  seed: 1337
+
+ranking_horizon_ms: 2000
+
+# task item 6: 9 momentum windows x 11 z thresholds x 5 volatility windows
+# = 495 SignalConfigs. task item 7: no confirmation filters in Stage A --
+# every one of flow/volume/imbalance/poly-lag stays NULL (never a sentinel
+# like -1/999), so this grid only sweeps the three momentum-landscape axes.
+signal_grid:
+  momentum_window_ms:
+    - 100
+    - 250
+    - 500
+    - 750
+    - 1000
+    - 1500
+    - 2000
+    - 3000
+    - 5000
+  z_threshold:
+    - 1.00
+    - 1.25
+    - 1.50
+    - 1.75
+    - 2.00
+    - 2.25
+    - 2.50
+    - 2.75
+    - 3.00
+    - 3.50
+    - 4.00
+  volatility_window_ms:
+    - 10000
+    - 30000
+    - 60000
+    - 120000
+    - 300000
+  # task item 8: no aggressive data-quality filters that could hide the
+  # effect -- only the contract-price/spread bounds already used
+  # throughout this pipeline (shown explicitly here, not left implicit).
+  max_spread:
+    - 0.05
+  min_contract_price:
+    - 0.05
+  max_contract_price:
+    - 0.95

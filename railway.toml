@@ -1,0 +1,6 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python -m poly_analyzer.main"
+restartPolicyType = "ALWAYS"

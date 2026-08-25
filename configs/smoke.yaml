@@ -1,0 +1,55 @@
+experiment:
+  name: smoke_v1
+
+data:
+  BTC: data/analyzer_btc.db
+  ETH: data/analyzer_eth.db
+  SOL: data/analyzer_sol.db
+
+results_db: data/research_results.db
+research_clock_ms: 100
+bootstrap_iterations: 50
+max_markets_per_asset: 1
+
+signal_grid:
+  momentum_window_ms:
+    - 1000
+  volatility_window_ms:
+    - 30000
+  z_threshold:
+    - 2.0
+  flow_window_ms:
+    - null
+  flow_threshold:
+    - null
+  max_spread:
+    - 0.05
+  min_contract_price:
+    - 0.05
+  max_contract_price:
+    - 0.95
+  min_time_remaining_ms:
+    - 0
+  max_time_remaining_ms:
+    - 1000000000
+
+execution_grid:
+  latency_ms:
+    - 250
+  size_shares:
+    - 100
+
+exit_grid:
+  tp_delta:
+    - 0.04
+  sl_delta:
+    - 0.03
+  max_holding_ms:
+    - 10000
+
+fee_model:
+  name: fixed_v1
+
+ranking:
+  min_signals: 0
+  min_markets: 0

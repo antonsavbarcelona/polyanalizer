@@ -1,0 +1,44 @@
+experiment:
+  name: stage_a_profile_100
+
+data:
+  BTC: data/analyzer_btc.db
+  ETH: data/analyzer_eth.db
+  SOL: data/analyzer_sol.db
+
+results_db: data/stage_a_profile_100_results.db
+
+latency_grid_ms: [100, 250, 500]
+size_grid_shares: [100]
+controls_per_signal: 5
+
+bootstrap:
+  iterations: 200
+  seed: 1337
+
+ranking_horizon_ms: 2000
+
+# 7 momentum x 5 z x 1 vol = 35 configs x 3 assets = 105 units
+signal_grid:
+  momentum_window_ms:
+    - 100
+    - 250
+    - 500
+    - 750
+    - 1000
+    - 1500
+    - 2000
+  z_threshold:
+    - 1.50
+    - 2.00
+    - 2.50
+    - 3.00
+    - 4.00
+  volatility_window_ms:
+    - 30000
+  max_spread:
+    - 0.05
+  min_contract_price:
+    - 0.05
+  max_contract_price:
+    - 0.95

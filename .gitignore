@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# pytest artifacts
+.pytest_cache/
+pytest-cache-files-*/
+.pytest_tmp/
+.tmp_pytest_run/
+tmp_pytest_run/
+
+# IDE
+.idea/
+*.iml
+
+# Secrets -- never commit real connection strings/credentials
+.env
+
+# Claude Code session runtime state (not project config)
+.claude/
+
+# Raw/results data (symlinked dirs, multi-GB DB files -- never commit)
+/data
+/data_hdd_original/
+
+# Run logs
+/logs/
+
+# Regenerable analysis caches
+research/.stage_c_volume_cache/
+
+# OS cruft
+.DS_Store
+Thumbs.db

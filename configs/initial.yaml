@@ -1,0 +1,67 @@
+experiment:
+  name: initial_discovery_v1
+
+data:
+  BTC: data/analyzer_btc.db
+  ETH: data/analyzer_eth.db
+  SOL: data/analyzer_sol.db
+
+results_db: data/research_results.db
+research_clock_ms: 100
+bootstrap_iterations: 100
+
+signal_grid:
+  momentum_window_ms:
+    - 500
+    - 1000
+  volatility_window_ms:
+    - 30000
+    - 60000
+  z_threshold:
+    - 2.0
+    - 2.5
+  flow_window_ms:
+    - null
+    - 1000
+  flow_threshold:
+    - null
+    - 0.30
+  max_spread:
+    - 0.05
+  min_contract_price:
+    - 0.05
+  max_contract_price:
+    - 0.95
+  min_time_remaining_ms:
+    - 0
+  max_time_remaining_ms:
+    - 1000000000
+
+execution_grid:
+  latency_ms:
+    - 100
+    - 250
+    - 500
+  size_shares:
+    - 100
+
+exit_grid:
+  tp_delta:
+    - 0.03
+    - 0.04
+    - 0.05
+  sl_delta:
+    - null
+    - 0.02
+    - 0.03
+  max_holding_ms:
+    - 2000
+    - 5000
+    - 10000
+
+fee_model:
+  name: fixed_v1
+
+ranking:
+  min_signals: 20
+  min_markets: 2

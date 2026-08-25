@@ -1,0 +1,30 @@
+experiment:
+  name: signal_discovery_smoke_v1
+
+data:
+  BTC: data/analyzer_btc.db
+  ETH: data/analyzer_eth.db
+  SOL: data/analyzer_sol.db
+
+results_db: data/signal_discovery_results.db
+max_markets_per_asset: 1
+
+latency_grid_ms: [100, 250, 500]
+size_grid_shares: [100]
+controls_per_signal: 5
+
+bootstrap:
+  iterations: 200
+  seed: 1337
+
+ranking_horizon_ms: 2000
+
+signal_grid:
+  momentum_window_ms: [500, 1000]
+  volatility_window_ms: [30000]
+  z_threshold: [2.0, 2.5]
+  flow_window_ms: [1000]
+  flow_threshold: [0.30]
+  max_spread: [0.05]
+  min_contract_price: [0.05]
+  max_contract_price: [0.95]
