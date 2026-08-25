@@ -352,13 +352,33 @@ class WriteJob:
     row: dict[str, Any]
 
 
+# Caps how much unwritten data can pile up in memory if the writer stalls
+# (network hiccup to Postgres, a hung connection, pool exhaustion...). A
+# real production incident: an unbounded queue here let a stalled Postgres
+# write silently balloon memory for ~40 minutes before anyone noticed --
+# the WebSocket feeds kept receiving fine, only the write side was stuck,
+# so nothing crashed or logged an error, it just grew. Past this many
+# unwritten rows, enqueue() drops the new row (loud, rate-limited log)
+# rather than let memory grow without bound -- losing a slice of raw data
+# during a genuine outage is recoverable; an OOM kill losing the entire
+# in-memory queue is not.
+MAX_QUEUE_SIZE = 50_000
+# A single batch write must complete within this long or it's abandoned --
+# without this, one hung `await conn.execute(...)` (dead connection the
+# pool didn't detect, a network black hole) blocks the writer loop
+# forever, which is exactly what turns a transient hiccup into the
+# unbounded-queue-growth scenario above.
+PG_WRITE_TIMEOUT_S = 15.0
+
+
 class Recorder:
     def __init__(self, cfg: RecorderConfig):
         self.cfg = cfg
-        self._queue: asyncio.Queue[WriteJob] = asyncio.Queue()
+        self._queue: asyncio.Queue[WriteJob] = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
         self._conn: sqlite3.Connection | None = None
         self._task: asyncio.Task | None = None
         self._pg_pool: Any = None  # asyncpg.Pool, created lazily inside _writer_loop()
+        self._dropped_since_log = 0
 
     def connect(self) -> None:
         if self.cfg.dsn:
@@ -381,7 +401,15 @@ class Recorder:
         self._task = asyncio.create_task(self._writer_loop())
 
     def enqueue(self, table: str, row: dict[str, Any]) -> None:
-        self._queue.put_nowait(WriteJob(table, row))
+        try:
+            self._queue.put_nowait(WriteJob(table, row))
+        except asyncio.QueueFull:
+            # Rate-limited: sustained backpressure calls this on every
+            # single event, one log line per drop would itself add load.
+            self._dropped_since_log += 1
+            if self._dropped_since_log == 1 or self._dropped_since_log % 1_000 == 0:
+                log.error("write queue full (%d), dropped %d row(s) for %s so far -- writer is stalled",
+                          MAX_QUEUE_SIZE, self._dropped_since_log, table)
 
     async def _writer_loop(self) -> None:
         if self.cfg.dsn:
@@ -404,11 +432,18 @@ class Recorder:
             except asyncio.QueueEmpty:
                 pass
             if self.cfg.dsn:
-                await self._write_batch_pg(batch)
+                try:
+                    await asyncio.wait_for(self._write_batch_pg(batch), timeout=PG_WRITE_TIMEOUT_S)
+                except asyncio.TimeoutError:
+                    log.error("Postgres batch write timed out after %.0fs (%d rows abandoned) -- "
+                              "writer loop continuing, not blocking forever", PG_WRITE_TIMEOUT_S, len(batch))
             else:
                 await asyncio.to_thread(self._write_batch, batch)
             for _ in batch:
                 self._queue.task_done()
+            if self._dropped_since_log and self._queue.qsize() < MAX_QUEUE_SIZE // 2:
+                log.warning("write queue recovered after dropping %d row(s)", self._dropped_since_log)
+                self._dropped_since_log = 0
 
     def _write_batch(self, batch: list[WriteJob]) -> None:
         assert self._conn is not None
