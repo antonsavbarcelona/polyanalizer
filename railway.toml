@@ -2,15 +2,14 @@
 builder = "NIXPACKS"
 
 [deploy]
+startCommand = "python -m poly_analyzer.main"
 restartPolicyType = "ALWAYS"
 
-# No startCommand here on purpose: this repo is deployed as THREE separate
-# Railway services (one per asset), sharing this one railway.toml/repo --
-# each service sets its own Start Command in the Railway dashboard
-# (python -m poly_analyzer.main --asset btc / --asset eth / --asset sol).
-# Config-as-code values override dashboard values, so hardcoding one asset
-# here would force all three services onto the same command. All three
-# need the same POLY_ANALYZER_DSN env var (shared Postgres) set per-service.
+# Deployed as THREE separate Railway services (one per asset), all sharing
+# this one railway.toml/repo/Start Command -- each service is
+# differentiated purely by its own env vars, not a per-service command
+# override: set POLY_ANALYZER_ASSET=btc / eth / sol per service, plus the
+# same POLY_ANALYZER_DSN (shared Postgres) on all three.
 
 # binance.com's WebSocket edge returns HTTP 451 (geo-blocked) for
 # connections from US IPs -- Railway's default region is US, which breaks

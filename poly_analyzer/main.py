@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import time
 
 from .binance_feed import BinanceFeed
@@ -204,14 +205,19 @@ async def run_all(debug_mode: bool) -> None:
 
 
 def main() -> None:
+    # ASSET env var (POLY_ANALYZER_ASSET) picks the asset when --asset isn't
+    # passed explicitly -- lets three Railway services share the exact same
+    # Start Command (python -m poly_analyzer.main) and one railway.toml,
+    # differentiated purely by each service's env vars (POLY_ANALYZER_ASSET
+    # = btc/eth/sol) instead of a per-service Start Command override.
+    env_asset = os.environ.get("POLY_ANALYZER_ASSET", "all").lower()
+
     parser = argparse.ArgumentParser(description="15m Polymarket Up/Down lead-lag discovery collector")
-    parser.add_argument("--asset", choices=sorted(ASSETS) + ["all"], default="all",
-                         help="which underlying to track. Default 'all' runs btc+eth+sol together in this "
-                              "one process/worker (each still gets its own WS subscriptions + MarketState) "
-                              "-- the deploy target: start the container/worker with no flags and it just "
-                              "collects everything. Pass e.g. --asset btc to isolate one asset for local "
-                              "debugging. 'all' needs POLY_ANALYZER_DSN set (see .env.example) so all three "
-                              "can safely share one database.")
+    parser.add_argument("--asset", choices=sorted(ASSETS) + ["all"], default=env_asset,
+                         help="which underlying to track (overrides POLY_ANALYZER_ASSET env var if given). "
+                              "'all' runs btc+eth+sol together in this one process/worker (each still gets "
+                              "its own WS subscriptions + MarketState); needs POLY_ANALYZER_DSN set (see "
+                              ".env.example) so all three can safely share one database.")
     parser.add_argument("--debug", action="store_true", help="mark all rows is_debug=1 (first 24h burn-in)")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
