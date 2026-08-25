@@ -94,6 +94,42 @@ def compute_derived_outcome(db_path: str, market_id: str, end_ts_ms: int,
         conn.close()
 
 
+async def compute_derived_outcome_pg(dsn: str, market_id: str, end_ts_ms: int,
+                                      reference_price: float | None) -> tuple[str | None, float | None]:
+    """Same query as compute_derived_outcome(), against Postgres instead of
+    the local SQLite file -- needed once the Recorder itself is writing to
+    Postgres (RecorderConfig.dsn set), since chainlink_observations then
+    only exists there; the SQLite file at db_path is never created/written
+    in that mode (a deployed collector hit exactly this: 'unable to open
+    database file', since the data/ directory itself is never created when
+    dsn is set -- see Recorder.connect())."""
+    if reference_price is None:
+        return None, None
+    import asyncpg
+    conn = await asyncio.wait_for(asyncpg.connect(dsn), timeout=15.0)
+    try:
+        row = await conn.fetchrow(
+            "SELECT twap_value FROM chainlink_observations "
+            "WHERE market_id = $1 AND observation_ts >= $2 AND twap_value IS NOT NULL "
+            "ORDER BY observation_ts ASC LIMIT 1",
+            market_id, end_ts_ms,
+        )
+        if row is None:
+            row = await conn.fetchrow(
+                "SELECT twap_value FROM chainlink_observations "
+                "WHERE market_id = $1 AND twap_value IS NOT NULL "
+                "ORDER BY observation_ts DESC LIMIT 1",
+                market_id,
+            )
+        if row is None or row["twap_value"] is None:
+            return None, None
+        twap_at_end = row["twap_value"]
+        outcome = "UP" if twap_at_end >= reference_price else "DOWN"
+        return outcome, twap_at_end
+    finally:
+        await conn.close()
+
+
 async def track_settlement(cfg: Config, market_id: str, end_ts_ms: int,
                             reference_price: float | None, recorder) -> None:
     await asyncio.sleep(cfg.market.settlement_start_delay_s)
@@ -110,9 +146,14 @@ async def track_settlement(cfg: Config, market_id: str, end_ts_ms: int,
                 break
         await asyncio.sleep(cfg.market.settlement_poll_interval_s)
 
-    derived_outcome, twap_at_end = await asyncio.to_thread(
-        compute_derived_outcome, cfg.recorder.db_path, market_id, end_ts_ms, reference_price,
-    )
+    if cfg.recorder.dsn:
+        derived_outcome, twap_at_end = await compute_derived_outcome_pg(
+            cfg.recorder.dsn, market_id, end_ts_ms, reference_price,
+        )
+    else:
+        derived_outcome, twap_at_end = await asyncio.to_thread(
+            compute_derived_outcome, cfg.recorder.db_path, market_id, end_ts_ms, reference_price,
+        )
 
     if official_outcome is None:
         log.warning("settlement: no official resolution for market %s within %.0fs timeout",

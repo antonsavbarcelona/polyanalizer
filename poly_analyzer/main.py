@@ -43,6 +43,23 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _log_task_exception(task: asyncio.Task) -> None:
+    """One-shot background tasks (settlement tracking, one per market
+    rollover) are deliberately fire-and-forget via create_task() -- they
+    can't be folded into App.run()'s single gather() call, which is fixed
+    upfront and runs forever. Without this callback, a failure inside one
+    is a silently orphaned Task: nothing awaits it, so the exception
+    doesn't surface until the Task object is garbage collected (which for
+    a short-lived process can mean never) -- the same failure mode fixed
+    for the Recorder's writer task, just structurally unfixable the same
+    way here since these tasks are created continuously, not once."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error("background task failed", exc_info=exc)
+
+
 class App:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -118,9 +135,10 @@ class App:
         ending_market_end_ts = self.state.market_end_ts
         ending_reference_price = self.state.chainlink_reference_price
         if ending_market_id is not None:
-            asyncio.create_task(track_settlement(
+            settlement_task = asyncio.create_task(track_settlement(
                 self.cfg, ending_market_id, ending_market_end_ts, ending_reference_price, self.recorder,
             ))
+            settlement_task.add_done_callback(_log_task_exception)
 
         log.info("[%s] market rollover -> %s (ends in %.0fs)", self.cfg.recorder.asset, info.slug,
                   (info.end_ts_ms - now_ms()) / 1000.0)

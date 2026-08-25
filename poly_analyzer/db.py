@@ -370,6 +370,13 @@ MAX_QUEUE_SIZE = 50_000
 # forever, which is exactly what turns a transient hiccup into the
 # unbounded-queue-growth scenario above.
 PG_WRITE_TIMEOUT_S = 15.0
+# Same reasoning applied to the initial pool creation + schema setup: a
+# real production case had `asyncpg.create_pool()` hang indefinitely (no
+# exception, no log, no data -- ever) for one asset while the other two
+# connected fine, and since this happens before _writer_loop()'s main
+# loop even starts, MAX_QUEUE_SIZE/PG_WRITE_TIMEOUT_S above never got a
+# chance to apply -- the writer task just never moved past this line.
+PG_CONNECT_TIMEOUT_S = 15.0
 
 
 class Recorder:
@@ -443,12 +450,15 @@ class Recorder:
         if self.cfg.dsn:
             import asyncpg  # local import: only required when Postgres is actually used
 
-            self._pg_pool = await asyncpg.create_pool(self.cfg.dsn, min_size=1, max_size=4)
+            self._pg_pool = await asyncio.wait_for(
+                asyncpg.create_pool(self.cfg.dsn, min_size=1, max_size=4),
+                timeout=PG_CONNECT_TIMEOUT_S,
+            )
             async with self._pg_pool.acquire() as conn:
                 # asyncpg's simple query protocol (no args) accepts multiple
                 # ;-separated statements in one call, same shape as
                 # sqlite3.executescript() above.
-                await conn.execute(PG_SCHEMA)
+                await asyncio.wait_for(conn.execute(PG_SCHEMA), timeout=PG_CONNECT_TIMEOUT_S)
             # Host+dbname (never the password) logged explicitly -- with
             # several Postgres instances/services around, "connected to
             # Postgres" alone doesn't say WHICH one; this makes it visible
