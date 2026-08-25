@@ -34,6 +34,7 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from .config import RecorderConfig
 
@@ -400,6 +401,22 @@ class Recorder:
     def start(self) -> None:
         self._task = asyncio.create_task(self._writer_loop())
 
+    def wait(self) -> asyncio.Task:
+        """The task started by start(), for the caller to await/gather
+        alongside its other long-running loops. Without this, a failure in
+        _writer_loop() (bad DSN, pool creation error, schema permission
+        error, ...) is a silently orphaned asyncio Task: create_task()
+        schedules it, but nothing ever awaits it, so the exception never
+        surfaces -- not a crash, not a log line, nothing -- until the Task
+        object is garbage collected (which for a Recorder living the whole
+        process lifetime effectively means never). This was a real bug: the
+        writer could die on its very first connection attempt while
+        Binance/Polymarket/Chainlink kept running and logging a healthy
+        status line, leaving the database permanently empty with zero
+        indication anything was wrong."""
+        assert self._task is not None
+        return self._task
+
     def enqueue(self, table: str, row: dict[str, Any]) -> None:
         try:
             self._queue.put_nowait(WriteJob(table, row))
@@ -421,7 +438,14 @@ class Recorder:
                 # ;-separated statements in one call, same shape as
                 # sqlite3.executescript() above.
                 await conn.execute(PG_SCHEMA)
-            log.info("connected to Postgres, schema ensured (asset=%s)", self.cfg.asset)
+            # Host+dbname (never the password) logged explicitly -- with
+            # several Postgres instances/services around, "connected to
+            # Postgres" alone doesn't say WHICH one; this makes it visible
+            # per-asset directly in the deployed logs instead of trusting
+            # what a Railway variable reference resolved to.
+            parsed = urlsplit(self.cfg.dsn)
+            log.info("connected to Postgres at %s:%s/%s, schema ensured (asset=%s)",
+                      parsed.hostname, parsed.port, parsed.path.lstrip("/"), self.cfg.asset)
 
         while True:
             job = await self._queue.get()

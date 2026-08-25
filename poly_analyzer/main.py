@@ -171,6 +171,7 @@ class App:
                 self.chainlink.run(),
                 self.market_rollover_loop(),
                 self.status_log_loop(),
+                self.recorder.wait(),
             )
         finally:
             await self.recorder.flush()
