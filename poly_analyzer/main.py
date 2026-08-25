@@ -174,9 +174,11 @@ class App:
             if self.state.market_end_ts is not None:
                 remaining_s = (self.state.market_end_ts - now_ms()) / 1000.0
             log.info(
-                "[%s] status: binance=%s polymarket=%s chainlink=%s market=%s remaining=%s",
+                "[%s] status: binance=%s polymarket=%s chainlink=%s market=%s remaining=%s "
+                "written=%d queued=%d",
                 self.cfg.recorder.asset, self.binance.connected, self.poly.connected, self.chainlink.connected,
                 self.current_market_id, f"{remaining_s:.0f}s" if remaining_s is not None else "?",
+                self.recorder.written_count, self.recorder.queue_size,
             )
 
     async def run(self) -> None:

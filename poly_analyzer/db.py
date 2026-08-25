@@ -387,6 +387,9 @@ class Recorder:
         self._task: asyncio.Task | None = None
         self._pg_pool: Any = None  # asyncpg.Pool, created lazily inside _writer_loop()
         self._dropped_since_log = 0
+        self.written_count = 0  # cumulative successful row writes, cheap in-memory checkpoint
+        # for status_log_loop -- avoids re-querying the DB just to answer
+        # "is this actually still writing" during a long unattended run.
 
     def connect(self) -> None:
         if self.cfg.dsn:
@@ -435,6 +438,10 @@ class Recorder:
         assert self._task is not None
         return self._task
 
+    @property
+    def queue_size(self) -> int:
+        return self._queue.qsize()
+
     def enqueue(self, table: str, row: dict[str, Any]) -> None:
         try:
             self._queue.put_nowait(WriteJob(table, row))
@@ -479,11 +486,13 @@ class Recorder:
             if self.cfg.dsn:
                 try:
                     await asyncio.wait_for(self._write_batch_pg(batch), timeout=PG_WRITE_TIMEOUT_S)
+                    self.written_count += len(batch)
                 except asyncio.TimeoutError:
                     log.error("Postgres batch write timed out after %.0fs (%d rows abandoned) -- "
                               "writer loop continuing, not blocking forever", PG_WRITE_TIMEOUT_S, len(batch))
             else:
                 await asyncio.to_thread(self._write_batch, batch)
+                self.written_count += len(batch)
             for _ in batch:
                 self._queue.task_done()
             if self._dropped_since_log and self._queue.qsize() < MAX_QUEUE_SIZE // 2:
