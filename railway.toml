@@ -4,3 +4,12 @@ builder = "NIXPACKS"
 [deploy]
 startCommand = "python -m poly_analyzer.main"
 restartPolicyType = "ALWAYS"
+
+# binance.com's WebSocket edge returns HTTP 451 (geo-blocked) for
+# connections from US IPs -- Railway's default region is US, which breaks
+# the Binance feed entirely (Polymarket/Chainlink still connect fine, only
+# Binance is blocked). europe-west4-drams3a (Amsterdam) is not
+# Binance-restricted. Single region, one replica -- this is a stateful
+# background worker, not a horizontally-scaled API.
+[deploy.multiRegionConfig."europe-west4-drams3a"]
+numReplicas = 1
