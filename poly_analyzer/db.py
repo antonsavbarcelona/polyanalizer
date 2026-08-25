@@ -388,6 +388,17 @@ class Recorder:
             # iteration (the one place guaranteed to run as a real asyncio
             # task) -- nothing to do synchronously here.
             return
+        # Loud on purpose: with no dsn, every row silently goes to a local
+        # SQLite file instead of the shared Postgres database, and nothing
+        # else in the startup path says so -- a missing/unset
+        # POLY_ANALYZER_DSN on a deployed service looked, from the logs
+        # alone, identical to a successful Postgres connection (both were
+        # silent) until this line existed. On Railway this file also lives
+        # on the container's ephemeral filesystem, so it's wiped on every
+        # redeploy -- i.e. this branch effectively means "collecting
+        # nothing durable" for a deployed service.
+        log.warning("POLY_ANALYZER_DSN not set -- writing to local SQLite at %s (asset=%s), "
+                    "NOT the shared Postgres database", self.cfg.db_path, self.cfg.asset)
         os.makedirs(os.path.dirname(self.cfg.db_path) or ".", exist_ok=True)
         # check_same_thread=False: writes happen via asyncio.to_thread, which
         # may run on a different worker thread each call. Safe here because
